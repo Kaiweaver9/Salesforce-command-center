@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Total_Score__c</fullName>
+    <externalId>false</externalId>
+    <formula>/* 1. Base Points (40 pts max) */
+40 +
+
+/* 2. Mileage (40 pts max / 120k anchor) */
+(40 * (1 - (Mileage__c / 120000))) +
+
+/* 3. Vehicle Year (10 pts max / 1-pt step) */
+CASE(Year__c,
+  &quot;2026&quot;, 10,
+  &quot;2025&quot;, 9,
+  &quot;2024&quot;, 8,
+  &quot;2023&quot;, 7,
+  &quot;2022&quot;, 6,
+  &quot;2021&quot;, 5,
+  &quot;2020&quot;, 4,
+  0
+) +
+
+/* 4. Owners (10 pts max / 2-pt step) */
+CASE(Previous_Owners__c,
+  1, 10,
+  2, 8,
+  3, 6,
+  4
+) +
+
+/* 5. Logistics Branching (Math-based logic) */
+IF(
+  Shipping_Cost__c &gt; 0,
+  10,
+  IF(
+    Logistics__c &lt;= 0,
+    0,
+    15 * (1 - (Logistics__c / 1200))
+  )
+) +
+
+/* 6. Price Adjustment (-30 scale on total landed price vs $18000 baseline) */
+(-30 * (((Car_Price__c + Shipping_Cost__c) - 18000) / 5000)) +
+
+/* 7. CA Tax Penalty (-2.0 pts flat ONLY if Drive Path in CA) */
+IF(
+  CONTAINS(UPPER(Location__c), &quot;CA&quot;) &amp;&amp; (Shipping_Cost__c &lt;= 0),
+  -2.0,
+  0
+)</formula>
+    <formulaTreatBlanksAs>BlankAsZero</formulaTreatBlanksAs>
+    <label>Total Score</label>
+    <precision>18</precision>
+    <required>false</required>
+    <scale>2</scale>
+    <trackTrending>false</trackTrending>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

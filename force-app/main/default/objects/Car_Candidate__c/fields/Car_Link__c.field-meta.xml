@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Car_Link__c</fullName>
+    <externalId>false</externalId>
+    <formula>HYPERLINK(
+  IF(
+    BEGINS(Listing_URL__c, &quot;http://&quot;) || BEGINS(Listing_URL__c, &quot;https://&quot;),
+    Listing_URL__c,
+    &quot;https://&quot; &amp; Listing_URL__c
+  ),
+  Name
+)</formula>
+    <formulaTreatBlanksAs>BlankAsZero</formulaTreatBlanksAs>
+    <label>Car Link</label>
+    <required>false</required>
+    <trackTrending>false</trackTrending>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>
