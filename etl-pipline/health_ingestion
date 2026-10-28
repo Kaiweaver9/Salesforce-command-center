@@ -1,0 +1,283 @@
+// CONFIGURATION - Placeholders for GitHub / Repository Display
+const CLIENT_ID = 'YOUR_SALESFORCE_CLIENT_ID';
+const CLIENT_SECRET = 'YOUR_SALESFORCE_CLIENT_SECRET';
+const SF_INSTANCE_URL = 'https://YOUR_INSTANCE.my.salesforce.com';
+const SF_API_VERSION = 'v60.0'; 
+
+/**
+ * Main execution pipeline - Real-Time Ingestion (Triggered every 5 minutes)
+ * REFACTORED: Decoupled weight dependency to enable asynchronous macro ingestion.
+ */
+function runHealthPipeline() {
+  const sfToken = getSalesforceToken();
+  if (!sfToken) {
+    Logger.log('System Failure: Unable to authenticate with Salesforce.');
+    return;
+  }
+
+  const token = ScriptApp.getOAuthToken();
+  const tz = "America/Los_Angeles"; // Locked system timezone matrix
+
+  // 1. Establish Today's Strict Local Time Window
+  const now = new Date();
+  const dateKey = Utilities.formatDate(now, tz, "yyyy-MM-dd");
+  const tzOffset = Utilities.formatDate(now, tz, "Z"); // Captures PDT (-0700) or PST (-0800) dynamically
+  
+  const startStr = dateKey + "T00:00:00.000" + tzOffset;
+  const startMillis = new Date(startStr).getTime();
+  const endMillis = now.getTime();
+
+  Logger.log('Pipeline active scanning window: ' + dateKey + ' (' + startStr + ' to Current Time)');
+
+  // 2. Extract Raw Weight Metrics (No Hard Stop)
+  const rawWeightInKg = getFitRawData('derived:com.google.weight:com.google.android.gms:merge_weight', startMillis, endMillis, token);
+
+  // 3. Construct Base Payload (Nutritional Data is allowed to flow independently)
+  let payload = {
+    "dateKey": dateKey,
+    "calories": roundToTenth(getFitData('com.google.nutrition', startMillis, endMillis, token, 'calories')),
+    "protein": roundToTenth(getFitData('com.google.nutrition', startMillis, endMillis, token, 'protein')),
+    "carbs": roundToTenth(getFitData('com.google.nutrition', startMillis, endMillis, token, 'carbs.total')),
+    "fats": roundToTenth(getFitData('com.google.nutrition', startMillis, endMillis, token, 'fat.total'))
+  };
+
+  // Inject Weight ONLY if the OS background sync has cleared
+  if (rawWeightInKg !== null) {
+    payload.weight = roundToTenth(rawWeightInKg * 2.20462);
+  } else {
+    Logger.log('Weight hardware pending OS background sync. Executing macro payload only for ' + dateKey);
+  }
+
+  const rawBodyFat = getFitRawData('derived:com.google.body.fat.percentage:com.google.android.gms:merged', startMillis, endMillis, token);
+  if (rawBodyFat !== null) {
+    payload.bodyFat = roundToTenth(rawBodyFat);
+  }
+
+  // ANTI-DUPLICATION RECON: Inject SF Id if record exists for this date to perform an update instead of insert
+  const existingId = getExistingRecordId(dateKey, sfToken);
+  if (existingId) {
+    payload.Id = existingId;
+  }
+
+  Logger.log('Pipeline Payload Compiled: ' + JSON.stringify(payload));
+
+  // 4. Execute Salesforce Upsert
+  const options = {
+    'method': 'post',
+    'contentType': 'application/json',
+    'headers': { 'Authorization': 'Bearer ' + sfToken },
+    'payload': JSON.stringify(payload),
+    'muteHttpExceptions': true
+  };
+
+  const response = UrlFetchApp.fetch(SF_INSTANCE_URL + '/services/apexrest/HealthDataIngestion/', options);
+  Logger.log('Salesforce Response: ' + response.getResponseCode() + ' | ' + response.getContentText());
+}
+
+/**
+ * THE CLEANUP CREW - Run this on a separate Time-Driven Trigger (e.g., Every 2 hours)
+ * Sweeps a rolling 72-hour calendar window to overwrite sync drops, flickers, or backdated logs.
+ */
+function runCleanupCrew() {
+  const sfToken = getSalesforceToken();
+  if (!sfToken) {
+    Logger.log('Cleanup Failure: Unable to authenticate with Salesforce.');
+    return;
+  }
+
+  const token = ScriptApp.getOAuthToken();
+  const now = new Date();
+  const tz = "America/Los_Angeles";
+
+  // THE CEILING: Sliding window starts at 1 (Yesterday) and goes to 3 (3 Days Ago)
+  for (let i = 1; i <= 3; i++) {
+    
+    let targetMillis = now.getTime() - (i * 24 * 60 * 60 * 1000);
+    let targetDate = new Date(targetMillis);
+
+    let dateKey = Utilities.formatDate(targetDate, tz, "yyyy-MM-dd");
+    let tzOffset = Utilities.formatDate(targetDate, tz, "Z"); 
+    
+    let startStr = dateKey + "T00:00:00.000" + tzOffset;
+    let endStr = dateKey + "T23:59:59.999" + tzOffset;
+
+    let startMillis = new Date(startStr).getTime();
+    let endMillis = new Date(endStr).getTime();
+
+    Logger.log('Cleanup Crew scanning window: ' + dateKey + ' (' + startStr + ' to ' + endStr + ')');
+
+    const rawWeightInKg = getFitRawData('derived:com.google.weight:com.google.android.gms:merge_weight', startMillis, endMillis, token);
+    const weightInLbs = rawWeightInKg ? (rawWeightInKg * 2.20462) : null;
+
+    let payload = {
+      "dateKey": dateKey,
+      "calories": roundToTenth(getFitData('com.google.nutrition', startMillis, endMillis, token, 'calories')),
+      "protein": roundToTenth(getFitData('com.google.nutrition', startMillis, endMillis, token, 'protein')),
+      "carbs": roundToTenth(getFitData('com.google.nutrition', startMillis, endMillis, token, 'carbs.total')),
+      "fats": roundToTenth(getFitData('com.google.nutrition', startMillis, endMillis, token, 'fat.total'))
+    };
+
+    if (weightInLbs !== null) {
+      payload.weight = roundToTenth(weightInLbs);
+    }
+    
+    const rawBodyFat = getFitRawData('derived:com.google.body.fat.percentage:com.google.android.gms:merged', startMillis, endMillis, token);
+    if (rawBodyFat !== null) {
+      payload.bodyFat = roundToTenth(rawBodyFat);
+    }
+
+    if (payload.calories === null && payload.protein === null && !payload.hasOwnProperty('weight') && !payload.hasOwnProperty('bodyFat')) {
+      Logger.log('Cleanup skipped for ' + dateKey + ': Window contains no data.');
+      continue;
+    }
+
+    const existingId = getExistingRecordId(dateKey, sfToken);
+    if (existingId) {
+      payload.Id = existingId;
+    }
+
+    Logger.log('Cleanup Crew payload compiled for ' + dateKey + ': ' + JSON.stringify(payload));
+
+    const options = {
+      'method': 'post',
+      'contentType': 'application/json',
+      'headers': { 'Authorization': 'Bearer ' + sfToken },
+      'payload': JSON.stringify(payload),
+      'muteHttpExceptions': true
+    };
+
+    const response = UrlFetchApp.fetch(SF_INSTANCE_URL + '/services/apexrest/HealthDataIngestion/', options);
+    Logger.log('Cleanup Crew Salesforce Response (' + dateKey + '): ' + response.getResponseCode() + ' | ' + response.getContentText());
+  }
+}
+
+/**
+ * RAW DATA ENGINE - Reads the exact dataset using nanosecond timestamps
+ */
+function getFitRawData(dataSourceId, start, end, token) {
+  const startNs = start * 1000000;
+  const endNs = end * 1000000;
+  
+  const url = 'https://www.googleapis.com/fitness/v1/users/me/dataSources/' + dataSourceId + '/datasets/' + startNs + '-' + endNs;
+  
+  const options = {
+    'method': 'get',
+    'headers': { 'Authorization': 'Bearer ' + token },
+    'muteHttpExceptions': true
+  };
+
+  const response = UrlFetchApp.fetch(url, options);
+  
+  if (response.getResponseCode() === 200) {
+    const res = JSON.parse(response.getContentText());
+    if (res.point && res.point.length > 0) {
+      return res.point[res.point.length - 1].value[0].fpVal;
+    }
+  }
+  return null;
+}
+
+/**
+ * AGGREGATE ENGINE - Maintained for Nutritional Sums
+ */
+function getFitData(type, start, end, token, nutrient) {
+  const url = 'https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate';
+  const payload = {
+    "aggregateBy": [{ "dataTypeName": type }],
+    "startTimeMillis": start,
+    "endTimeMillis": end,
+    "bucketByTime": { "durationMillis": (end - start) }
+  };
+  
+  const response = UrlFetchApp.fetch(url, {
+    'method': 'post',
+    'contentType': 'application/json',
+    'headers': { 'Authorization': 'Bearer ' + token },
+    'payload': JSON.stringify(payload),
+    'muteHttpExceptions': true
+  });
+
+  const res = JSON.parse(response.getContentText());
+  if (response.getResponseCode() !== 200 || !res.bucket || res.bucket.length === 0) return null;
+  
+  const dataset = res.bucket[0].dataset[0];
+  if (!dataset.point[0]) return null;
+  
+  const val = dataset.point[0].value[0];
+  if (nutrient && val.mapVal) {
+    const target = val.mapVal.find(i => i.key === nutrient);
+    return target ? target.value.fpVal : null;
+  }
+  return val.fpVal || val.intVal;
+}
+
+/**
+ * Recons existing record in Salesforce via REST API query
+ */
+function getExistingRecordId(dateKey, sfToken) {
+  const query = "SELECT Id FROM Health_data__c WHERE Date_Key__c = '" + dateKey + "' LIMIT 1";
+  const queryUrl = SF_INSTANCE_URL + '/services/data/' + SF_API_VERSION + '/query/?q=' + encodeURIComponent(query);
+  
+  const options = {
+    'method': 'get',
+    'headers': { 'Authorization': 'Bearer ' + sfToken },
+    'muteHttpExceptions': true
+  };
+  
+  const response = UrlFetchApp.fetch(queryUrl, options);
+  if (response.getResponseCode() === 200) {
+    const resData = JSON.parse(response.getContentText());
+    if (resData.records && resData.records.length > 0) {
+      return resData.records[0].Id;
+    }
+  }
+  return null;
+}
+
+/**
+ * Legacy support node - Left intact to ensure no infrastructure dependency failures
+ */
+function getLatestSFAnchor(sfToken) {
+  const query = "SELECT Id, CreatedDate, Date_Key__c FROM Health_data__c WHERE latest_weigh_in__c = true ORDER BY CreatedDate DESC LIMIT 1";
+  const queryUrl = SF_INSTANCE_URL + '/services/data/' + SF_API_VERSION + '/query/?q=' + encodeURIComponent(query);
+  
+  const options = {
+    'method': 'get',
+    'headers': { 'Authorization': 'Bearer ' + sfToken },
+    'muteHttpExceptions': true
+  };
+  
+  const response = UrlFetchApp.fetch(queryUrl, options);
+  const resData = JSON.parse(response.getContentText());
+  
+  if (response.getResponseCode() === 200 && resData.records && resData.records.length > 0) {
+    return resData.records[0];
+  }
+  return null;
+}
+
+function roundToTenth(val) {
+  if (val === null || val === undefined) return null;
+  return parseFloat(Number(val).toFixed(1));
+}
+
+function getSalesforceToken() {
+  const options = {
+    'method': 'post', 
+    'payload': {
+      'grant_type': 'client_credentials', 
+      'client_id': CLIENT_ID, 
+      'client_secret': CLIENT_SECRET
+    },
+    'muteHttpExceptions': true
+  };
+
+  const resp = UrlFetchApp.fetch(SF_INSTANCE_URL + '/services/oauth2/token', options);
+  
+  if (resp.getResponseCode() !== 200) {
+    Logger.log('AUTH BREACH: Salesforce rejected the connection. Response: ' + resp.getContentText());
+    return null;
+  }
+  
+  return JSON.parse(resp.getContentText()).access_token;
+}
