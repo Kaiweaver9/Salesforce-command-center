@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Net_Extraction__c</fullName>
+    <formula>IF(
+    TEXT(Income_Source__r.Income_Type__c) = &quot;Salary&quot;,
+
+    /* SALARY EXTRACTION */
+    (Income_Source__r.Salary_Amount__c / Income_Source__r.Annual_Pay_Periods__c) * 0.775,
+
+    /* HOURLY EXTRACTION (Sovereign Precision Engine - V11) */
+    (
+        /* 1. GROSS PAY */
+        ((Hours_Worked__c * Income_Source__r.Base_Rate__c) + (Overtime_Hours__c * Income_Source__r.Overtime_Rate__c)) -
+
+        /* 2. FICA (SS 6.2% + Med 1.45%) */
+        (
+            ROUND(((Hours_Worked__c * Income_Source__r.Base_Rate__c) + (Overtime_Hours__c * Income_Source__r.Overtime_Rate__c)) * 0.062, 2) + 
+            ROUND(((Hours_Worked__c * Income_Source__r.Base_Rate__c) + (Overtime_Hours__c * Income_Source__r.Overtime_Rate__c)) * 0.0145, 2)
+        ) -
+
+        /* 3. IDAHO STATE TAX (5.15% Rate | $529 Threshold) */
+        IF(((Hours_Worked__c * Income_Source__r.Base_Rate__c) + (Overtime_Hours__c * Income_Source__r.Overtime_Rate__c)) &lt;= 529.00, 0,
+            ROUND((((Hours_Worked__c * Income_Source__r.Base_Rate__c) + (Overtime_Hours__c * Income_Source__r.Overtime_Rate__c)) - 529.00) * 0.0515, 0)
+        ) -
+
+        /* 4. FEDERAL CORE + DYNAMIC DRIFT CALIBRATOR */
+        (
+            /* Pure 26-Period Algorithmic Core */
+            IF( (((Hours_Worked__c * Income_Source__r.Base_Rate__c) + (Overtime_Hours__c * Income_Source__r.Overtime_Rate__c)) * 26) &lt;= 16100, 0,
+                IF( (((Hours_Worked__c * Income_Source__r.Base_Rate__c) + (Overtime_Hours__c * Income_Source__r.Overtime_Rate__c)) * 26) &lt;= 28500,
+                    ROUND( ( ( (((Hours_Worked__c * Income_Source__r.Base_Rate__c) + (Overtime_Hours__c * Income_Source__r.Overtime_Rate__c)) * 26) - 16100 ) * 0.10 ) / 26, 2),
+                    IF( (((Hours_Worked__c * Income_Source__r.Base_Rate__c) + (Overtime_Hours__c * Income_Source__r.Overtime_Rate__c)) * 26) &lt;= 66500,
+                        ROUND( ( 1240 + ( ( (((Hours_Worked__c * Income_Source__r.Base_Rate__c) + (Overtime_Hours__c * Income_Source__r.Overtime_Rate__c)) * 26) - 28500 ) * 0.12 ) ) / 26, 2),
+                        IF( (((Hours_Worked__c * Income_Source__r.Base_Rate__c) + (Overtime_Hours__c * Income_Source__r.Overtime_Rate__c)) * 26) &lt;= 130500,
+                            ROUND( ( 5800 + ( ( (((Hours_Worked__c * Income_Source__r.Base_Rate__c) + (Overtime_Hours__c * Income_Source__r.Overtime_Rate__c)) * 26) - 66500 ) * 0.22 ) ) / 26, 2),
+                            ROUND( ( 19880 + ( ( (((Hours_Worked__c * Income_Source__r.Base_Rate__c) + (Overtime_Hours__c * Income_Source__r.Overtime_Rate__c)) * 26) - 130500 ) * 0.24 ) ) / 26, 2)
+                        )
+                    )
+                )
+            )
+            /* Dynamic Calibrator: Triggers based on gross velocity to enforce 1:1 net parity */
+            + IF( ((Hours_Worked__c * Income_Source__r.Base_Rate__c) + (Overtime_Hours__c * Income_Source__r.Overtime_Rate__c)) &gt;= 2700.00, 0.98, -0.03 )
+        )
+    )
+)</formula>
+    <formulaTreatBlanksAs>BlankAsZero</formulaTreatBlanksAs>
+    <label>Projected Income</label>
+    <precision>18</precision>
+    <required>false</required>
+    <scale>2</scale>
+    <trackTrending>false</trackTrending>
+    <type>Currency</type>
+</CustomField>

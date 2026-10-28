@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Base_Extraction__c</fullName>
+    <formula>IF(
+    TEXT(Income_Source__r.Income_Type__c) = &quot;Salary&quot;,
+
+    /* SALARY EXTRACTION */
+    (Income_Source__r.Salary_Amount__c / Income_Source__r.Annual_Pay_Periods__c) * 0.775,
+
+    /* HOURLY BASE EXTRACTION (Zero Overtime Simulation) */
+    (
+        /* 1. GROSS PAY: Base Hours only */
+        (Hours_Worked__c * Income_Source__r.Base_Rate__c) -
+
+        /* 2. FICA: Recalculated on Base Gross only */
+        (
+            ROUND((Hours_Worked__c * Income_Source__r.Base_Rate__c) * 0.062, 2) + 
+            ROUND((Hours_Worked__c * Income_Source__r.Base_Rate__c) * 0.0145, 2)
+        ) -
+
+        /* 3. IDAHO STATE TAX: 5.15% Rate | $529 Threshold */
+        IF((Hours_Worked__c * Income_Source__r.Base_Rate__c) &lt;= 529.00, 0,
+            ROUND(((Hours_Worked__c * Income_Source__r.Base_Rate__c) - 529.00) * 0.0515, 0)
+        ) -
+
+        /* 4. FEDERAL PROGRESSIVE WITHHOLDING: Calibrated to 47.66 */
+        IF((Hours_Worked__c * Income_Source__r.Base_Rate__c) &lt;= 619.23, 0,
+            IF((Hours_Worked__c * Income_Source__r.Base_Rate__c) &lt;= 1096.15,
+                ROUND(((Hours_Worked__c * Income_Source__r.Base_Rate__c) - 619.23) * 0.10, 2),
+                ROUND(47.66 + (((Hours_Worked__c * Income_Source__r.Base_Rate__c) - 1096.15) * 0.12), 2)
+            )
+        )
+    )
+)</formula>
+    <formulaTreatBlanksAs>BlankAsZero</formulaTreatBlanksAs>
+    <label>Base Income</label>
+    <precision>18</precision>
+    <required>false</required>
+    <scale>2</scale>
+    <trackTrending>false</trackTrending>
+    <type>Currency</type>
+</CustomField>

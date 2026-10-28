@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Status__c</fullName>
+    <label>Status</label>
+    <required>false</required>
+    <trackTrending>false</trackTrending>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value>
+                <fullName>Vision</fullName>
+                <color>#FF0000</color>
+                <default>false</default>
+                <label>Vision</label>
+            </value>
+            <value>
+                <fullName>Planning</fullName>
+                <color>#FF6600</color>
+                <default>false</default>
+                <label>Planning</label>
+            </value>
+            <value>
+                <fullName>Active</fullName>
+                <color>#FF9900</color>
+                <default>false</default>
+                <label>Active</label>
+            </value>
+            <value>
+                <fullName>Optimization</fullName>
+                <color>#F3D904</color>
+                <default>false</default>
+                <label>Optimization</label>
+            </value>
+            <value>
+                <fullName>Final Stages</fullName>
+                <color>#B6E32E</color>
+                <default>false</default>
+                <label>Final Stages</label>
+            </value>
+            <value>
+                <fullName>Completed</fullName>
+                <color>#33CC00</color>
+                <default>false</default>
+                <label>Completed</label>
+            </value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>
