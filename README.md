@@ -1,18 +1,44 @@
-# Salesforce DX Project: Next Steps
+# LWC Command Center | Salesforce Health & Performance Dashboard
 
-Now that you’ve created a Salesforce DX project, what’s next? Here are some documentation resources to get you started.
+![Salesforce LWC Health & Performance Dashboard](./LWC%20Dashboard%20Blurred.png)
 
-## How Do You Plan to Deploy Your Changes?
+## Overview
+A custom Salesforce application built on Developer Edition that centralizes real-time health, financial, and skill-building metrics into a unified dashboard. The project combines dynamic Lightning Web Components (LWCs), Apex backend controllers, and automated data pipelines to track daily performance without manual overhead.
 
-Do you want to deploy a set of changes, or create a self-contained application? Choose a [development model](https://developer.salesforce.com/tools/vscode/en/user-guide/development-models).
+---
 
-## Configure Your Salesforce DX Project
+## Key Modules & Interface
 
-The `sfdx-project.json` file contains useful configuration information for your project. See [Salesforce DX Project Configuration](https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/sfdx_dev_ws_config.htm) in the _Salesforce DX Developer Guide_ for details about this file.
+### 1. Top Ticker Bar
+* **Live Metrics**: Displays current bank balance, net worth, current weight, and daily target calories.
+* **Trajectory Indicators**: Shows real-time direction to see if daily metrics are pulling toward or drifting away from long-term targets.
 
-## Read All About It
+### 2. Main Analytics & Interactive Charting
+* **Time Horizons**: Toggle views across 7-day, 30-day, and Year-To-Date (YTD) windows.
+* **Metric Selector**: Interactive dropdowns to isolate and review specific trends over time (Weight, TDEE, Calories, Protein, and Financial targets).
 
-- [Salesforce Extensions Documentation](https://developer.salesforce.com/tools/vscode/)
-- [Salesforce CLI Setup Guide](https://developer.salesforce.com/docs/atlas.en-us.sfdx_setup.meta/sfdx_setup/sfdx_setup_intro.htm)
-- [Salesforce DX Developer Guide](https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/sfdx_dev_intro.htm)
-- [Salesforce CLI Command Reference](https://developer.salesforce.com/docs/atlas.en-us.sfdx_cli_reference.meta/sfdx_cli_reference/cli_reference.htm)
+### 3. Health Intelligence Node
+* **Automated Data Ingestion**: Pulls daily biometric inputs via external API pipelines (Google Health Connect / Apps Script to Salesforce Custom Objects).
+* **TDEE & Macro Engine**: Calculates rolling TDEE averages and daily target calories to drive precise weekly weight velocity.
+
+### 4. Goals & Performance Index
+* **Goal Swapping**: Arrow tab navigation to cycle through active health and financial milestones on the fly.
+* **Unified Performance Score**: A single daily execution percentage combining health, daily effort, and financial execution.
+* **Trailhead Tracking**: Tracks study velocity, points, and certification milestone progress.
+
+---
+
+## Tech Stack & Data Architecture
+
+* **Frontend**: Custom Lightning Web Components (LWC), Chart.js integration, CSS layout.
+* **Backend**: Apex Controllers, custom SOQL queries, REST API endpoints.
+* **Data Model**: 11 Custom Objects, validation rules, formula fields, and roll-up summary fields.
+* **Automation & Tools**: Google Apps Script ETL pipelines, Salesforce DX CLI, VS Code, Git/GitHub.
+
+---
+
+## Local Setup & Deployment
+
+1. **Clone the repository**:
+   ```bash
+   git clone [https://github.com/Kaiweaver9/Salesforce-command-center.git](https://github.com/Kaiweaver9/Salesforce-command-center.git)
