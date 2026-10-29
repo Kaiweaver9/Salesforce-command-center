@@ -15,7 +15,7 @@ A custom Salesforce application built on Developer Edition that centralizes real
 
 ### 2. Main Analytics & Interactive Charting
 * **Time Horizons**: Toggle views across 7-day, 30-day, and Year-To-Date (YTD) windows.
-* **Metric Selector**: Interactive dropdowns to isolate and review specific trends over time (Weight, TDEE, Calories, Protein, Macronutrients as well as Financial targets).
+* **Metric Selector**: Interactive dropdowns to isolate and review specific trends over time (Weight, Body Fat %, TDEE, Calories, Macronutrients as well as Financial targets).
 
 ### 3. Health Intelligence Node
 * **Automated Data Ingestion**: Pulls daily biometric inputs via external API pipelines (Google Health Connect / Apps Script to Salesforce Custom Objects).
